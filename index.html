@@ -9,6 +9,7 @@
         #results { margin-top: 20px; background: #fff; padding: 10px; border-radius: 5px; max-height: 400px; overflow-y: auto; }
         .suspicious { color: red; font-weight: bold; }
         .safe { color: green; font-weight: bold; }
+        .neutral { color: orange; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -29,7 +30,15 @@
 
         function scanContent(filename, content) {
             const suspiciousPatterns = [/system\s*\(/i, /popen\s*\(/i, /exec\s*\(/i, /CreateProcess/i, /ShellExecute/i];
-            return suspiciousPatterns.some(pattern => pattern.test(content));
+            const neutralPatterns = [/fopen\s*\(/i, /fclose\s*\(/i, /fread\s*\(/i, /fwrite\s*\(/i];
+            
+            if (suspiciousPatterns.some(pattern => pattern.test(content))) {
+                return 'SUSPICIOUS';
+            } else if (neutralPatterns.some(pattern => pattern.test(content))) {
+                return 'NEUTRAL';
+            } else {
+                return 'SAFE';
+            }
         }
 
         scanBtn.addEventListener('click', async () => {
@@ -47,9 +56,8 @@
                 for (const [name, entry] of Object.entries(entries)) {
                     if (name.endsWith('.c') || name.endsWith('.cpp') || name.endsWith('.cs')) {
                         const text = await entry.text();
-                        const suspicious = scanContent(name, text);
-                        const status = suspicious ? 'SUSPICIOUS' : 'SAFE';
-                        results.innerHTML += `<p>${name}: <span class="${suspicious ? 'suspicious' : 'safe'}">${status}</span></p>`;
+                        const status = scanContent(name, text);
+                        results.innerHTML += `<p>${name}: <span class="${status.toLowerCase()}">${status}</span></p>`;
                         reportText += `${name}: ${status}\n`;
                     }
                 }
@@ -66,9 +74,8 @@
                             const extracted = extractor.extractFiles([name]);
                             if (extracted[0].state === "SUCCESS") {
                                 const content = new TextDecoder().decode(extracted[1][0].extraction);
-                                const suspicious = scanContent(name, content);
-                                const status = suspicious ? 'SUSPICIOUS' : 'SAFE';
-                                results.innerHTML += `<p>${name}: <span class="${suspicious ? 'suspicious' : 'safe'}">${status}</span></p>`;
+                                const status = scanContent(name, content);
+                                results.innerHTML += `<p>${name}: <span class="${status.toLowerCase()}">${status}</span></p>`;
                                 reportText += `${name}: ${status}\n`;
                             }
                         }
