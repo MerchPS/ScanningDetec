@@ -32,7 +32,7 @@
         function scanContent(filename, content) {
             const suspiciousPatterns = [/system\s*\(/i, /popen\s*\(/i, /exec\s*\(/i, /CreateProcess/i, /ShellExecute/i];
             const neutralPatterns = [/fopen\s*\(/i, /fclose\s*\(/i, /fread\s*\(/i, /fwrite\s*\(/i];
-            
+
             if (suspiciousPatterns.some(pattern => pattern.test(content))) {
                 return 'SUSPICIOUS';
             } else if (neutralPatterns.some(pattern => pattern.test(content))) {
@@ -107,7 +107,9 @@
             const a = document.createElement('a');
             a.href = url;
             a.download = 'backdoor_report.txt';
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
             URL.revokeObjectURL(url);
         });
     </script>
