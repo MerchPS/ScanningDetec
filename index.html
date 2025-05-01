@@ -6,58 +6,95 @@
     <style>
         body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; }
         h1 { color: #333; }
-        #results { margin-top: 20px; background: #fff; padding: 10px; border-radius: 5px; }
+        #results { margin-top: 20px; background: #fff; padding: 10px; border-radius: 5px; max-height: 400px; overflow-y: auto; }
         .suspicious { color: red; font-weight: bold; }
         .safe { color: green; font-weight: bold; }
     </style>
 </head>
 <body>
     <h1>Backdoor Detector (C / C++ / C#)</h1>
-    <input type="file" id="rarInput" accept=".rar">
+    <input type="file" id="archiveInput" accept=".rar,.zip">
     <button id="scanBtn">Scan Files</button>
+    <button id="downloadBtn">Download Report</button>
     <div id="results"></div>
 
-    <script src="https://unpkg.com/fflate/umd/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/unzipit/1.4.0/unzipit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/unrar-js@latest/dist/unrar.js"></script>
     <script>
         const scanBtn = document.getElementById('scanBtn');
-        const rarInput = document.getElementById('rarInput');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const archiveInput = document.getElementById('archiveInput');
         const results = document.getElementById('results');
+        let reportText = '';
 
         function scanContent(filename, content) {
             const suspiciousPatterns = [/system\s*\(/i, /popen\s*\(/i, /exec\s*\(/i, /CreateProcess/i, /ShellExecute/i];
-            let isSuspicious = false;
-            suspiciousPatterns.forEach(pattern => {
-                if (pattern.test(content)) {
-                    isSuspicious = true;
-                }
-            });
-            return isSuspicious;
+            return suspiciousPatterns.some(pattern => pattern.test(content));
         }
 
         scanBtn.addEventListener('click', async () => {
-            const file = rarInput.files[0];
+            const file = archiveInput.files[0];
             if (!file) {
-                alert('Please select a .rar file');
+                alert('Please select a .rar or .zip file');
                 return;
             }
-            const arrayBuffer = await file.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
+            const filename = file.name.toLowerCase();
+            results.innerHTML = '<h2>Scan Results:</h2>';
+            reportText = 'Backdoor Detector Report\n=========================\n';
 
-            fflate.unzip(uint8Array, (err, files) => {
-                if (err) {
-                    results.innerHTML = '<p class="suspicious">Failed to unzip .rar file (only .zip supported here)</p>';
-                    return;
-                }
-
-                results.innerHTML = '<h2>Scan Results:</h2>';
-                Object.keys(files).forEach(filename => {
-                    if (filename.endsWith('.c') || filename.endsWith('.cpp') || filename.endsWith('.cs')) {
-                        const textContent = new TextDecoder().decode(files[filename]);
-                        const suspicious = scanContent(filename, textContent);
-                        results.innerHTML += `<p>${filename}: <span class="${suspicious ? 'suspicious' : 'safe'}">${suspicious ? 'SUSPICIOUS' : 'SAFE'}</span></p>`;
+            if (filename.endsWith('.zip')) {
+                const entries = await unzipit.open(file);
+                for (const [name, entry] of Object.entries(entries)) {
+                    if (name.endsWith('.c') || name.endsWith('.cpp') || name.endsWith('.cs')) {
+                        const text = await entry.text();
+                        const suspicious = scanContent(name, text);
+                        const status = suspicious ? 'SUSPICIOUS' : 'SAFE';
+                        results.innerHTML += `<p>${name}: <span class="${suspicious ? 'suspicious' : 'safe'}">${status}</span></p>`;
+                        reportText += `${name}: ${status}\n`;
                     }
-                });
-            });
+                }
+            } else if (filename.endsWith('.rar')) {
+                const arrayBuffer = await file.arrayBuffer();
+                const extractor = await Unrar.createExtractorFromData(new Uint8Array(arrayBuffer));
+                const list = extractor.getFileList();
+
+                if (list[0].state === "SUCCESS") {
+                    const files = list[1].fileHeaders;
+                    for (const fileHeader of files) {
+                        const name = fileHeader.name;
+                        if (name.endsWith('.c') || name.endsWith('.cpp') || name.endsWith('.cs')) {
+                            const extracted = extractor.extractFiles([name]);
+                            if (extracted[0].state === "SUCCESS") {
+                                const content = new TextDecoder().decode(extracted[1][0].extraction);
+                                const suspicious = scanContent(name, content);
+                                const status = suspicious ? 'SUSPICIOUS' : 'SAFE';
+                                results.innerHTML += `<p>${name}: <span class="${suspicious ? 'suspicious' : 'safe'}">${status}</span></p>`;
+                                reportText += `${name}: ${status}\n`;
+                            }
+                        }
+                    }
+                } else {
+                    results.innerHTML += '<p class="suspicious">Failed to read RAR file.</p>';
+                    reportText += 'Failed to read RAR file.\n';
+                }
+            } else {
+                results.innerHTML += '<p class="suspicious">Unsupported file type. Please upload .zip or .rar only.</p>';
+                reportText += 'Unsupported file type.\n';
+            }
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            if (!reportText) {
+                alert('Please run a scan first.');
+                return;
+            }
+            const blob = new Blob([reportText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'backdoor_report.txt';
+            a.click();
+            URL.revokeObjectURL(url);
         });
     </script>
 </body>
