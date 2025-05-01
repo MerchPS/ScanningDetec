@@ -43,7 +43,7 @@
         }
 
         async function scanZip(file) {
-            const entries = await unzipit.open(file);
+            const { entries } = await unzipit.open(file);
             for (const [name, entry] of Object.entries(entries)) {
                 if (name.endsWith('.c') || name.endsWith('.cpp') || name.endsWith('.cs')) {
                     const text = await entry.text();
@@ -119,6 +119,12 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+        });
+
+        window.addEventListener('error', (e) => {
+            console.error('Global error:', e);
+            results.innerHTML += `<p class="error">Global Error: ${e.message}</p>`;
+            reportText += `Global Error: ${e.message}\n`;
         });
     </script>
 </body>
