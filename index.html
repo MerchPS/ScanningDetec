@@ -10,6 +10,7 @@
         .suspicious { color: red; font-weight: bold; }
         .safe { color: green; font-weight: bold; }
         .neutral { color: orange; font-weight: bold; }
+        .error { color: purple; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -51,42 +52,48 @@
             results.innerHTML = '<h2>Scan Results:</h2>';
             reportText = 'Backdoor Detector Report\n=========================\n';
 
-            if (filename.endsWith('.zip')) {
-                const entries = await unzipit.open(file);
-                for (const [name, entry] of Object.entries(entries)) {
-                    if (name.endsWith('.c') || name.endsWith('.cpp') || name.endsWith('.cs')) {
-                        const text = await entry.text();
-                        const status = scanContent(name, text);
-                        results.innerHTML += `<p>${name}: <span class="${status.toLowerCase()}">${status}</span></p>`;
-                        reportText += `${name}: ${status}\n`;
-                    }
-                }
-            } else if (filename.endsWith('.rar')) {
-                const arrayBuffer = await file.arrayBuffer();
-                const extractor = await Unrar.createExtractorFromData(new Uint8Array(arrayBuffer));
-                const list = extractor.getFileList();
-
-                if (list[0].state === "SUCCESS") {
-                    const files = list[1].fileHeaders;
-                    for (const fileHeader of files) {
-                        const name = fileHeader.name;
+            try {
+                if (filename.endsWith('.zip')) {
+                    const entries = await unzipit.open(file);
+                    for (const [name, entry] of Object.entries(entries)) {
                         if (name.endsWith('.c') || name.endsWith('.cpp') || name.endsWith('.cs')) {
-                            const extracted = extractor.extractFiles([name]);
-                            if (extracted[0].state === "SUCCESS") {
-                                const content = new TextDecoder().decode(extracted[1][0].extraction);
-                                const status = scanContent(name, content);
-                                results.innerHTML += `<p>${name}: <span class="${status.toLowerCase()}">${status}</span></p>`;
-                                reportText += `${name}: ${status}\n`;
-                            }
+                            const text = await entry.text();
+                            const status = scanContent(name, text);
+                            results.innerHTML += `<p>${name}: <span class="${status.toLowerCase()}">${status}</span></p>`;
+                            reportText += `${name}: ${status}\n`;
                         }
                     }
+                } else if (filename.endsWith('.rar')) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const extractor = await Unrar.createExtractorFromData(new Uint8Array(arrayBuffer));
+                    const list = extractor.getFileList();
+
+                    if (list[0].state === "SUCCESS") {
+                        const files = list[1].fileHeaders;
+                        for (const fileHeader of files) {
+                            const name = fileHeader.name;
+                            if (name.endsWith('.c') || name.endsWith('.cpp') || name.endsWith('.cs')) {
+                                const extracted = extractor.extractFiles([name]);
+                                if (extracted[0].state === "SUCCESS") {
+                                    const content = new TextDecoder().decode(extracted[1][0].extraction);
+                                    const status = scanContent(name, content);
+                                    results.innerHTML += `<p>${name}: <span class="${status.toLowerCase()}">${status}</span></p>`;
+                                    reportText += `${name}: ${status}\n`;
+                                }
+                            }
+                        }
+                    } else {
+                        results.innerHTML += '<p class="error">Failed to read RAR file.</p>';
+                        reportText += 'Failed to read RAR file.\n';
+                    }
                 } else {
-                    results.innerHTML += '<p class="suspicious">Failed to read RAR file.</p>';
-                    reportText += 'Failed to read RAR file.\n';
+                    results.innerHTML += '<p class="error">Unsupported file type. Please upload .zip or .rar only.</p>';
+                    reportText += 'Unsupported file type.\n';
                 }
-            } else {
-                results.innerHTML += '<p class="suspicious">Unsupported file type. Please upload .zip or .rar only.</p>';
-                reportText += 'Unsupported file type.\n';
+            } catch (err) {
+                console.error(err);
+                results.innerHTML += `<p class="error">Error: ${err.message}</p>`;
+                reportText += `Error: ${err.message}\n`;
             }
         });
 
