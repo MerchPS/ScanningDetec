@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Backdoor Detector</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; }
+        h1 { color: #333; }
+        #results { margin-top: 20px; background: #fff; padding: 10px; border-radius: 5px; }
+        .suspicious { color: red; font-weight: bold; }
+        .safe { color: green; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Backdoor Detector (C / C++ / C#)</h1>
+    <input type="file" id="rarInput" accept=".rar">
+    <button id="scanBtn">Scan Files</button>
+    <div id="results"></div>
+
+    <script src="https://unpkg.com/fflate/umd/index.js"></script>
+    <script>
+        const scanBtn = document.getElementById('scanBtn');
+        const rarInput = document.getElementById('rarInput');
+        const results = document.getElementById('results');
+
+        function scanContent(filename, content) {
+            const suspiciousPatterns = [/system\s*\(/i, /popen\s*\(/i, /exec\s*\(/i, /CreateProcess/i, /ShellExecute/i];
+            let isSuspicious = false;
+            suspiciousPatterns.forEach(pattern => {
+                if (pattern.test(content)) {
+                    isSuspicious = true;
+                }
+            });
+            return isSuspicious;
+        }
+
+        scanBtn.addEventListener('click', async () => {
+            const file = rarInput.files[0];
+            if (!file) {
+                alert('Please select a .rar file');
+                return;
+            }
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+
+            fflate.unzip(uint8Array, (err, files) => {
+                if (err) {
+                    results.innerHTML = '<p class="suspicious">Failed to unzip .rar file (only .zip supported here)</p>';
+                    return;
+                }
+
+                results.innerHTML = '<h2>Scan Results:</h2>';
+                Object.keys(files).forEach(filename => {
+                    if (filename.endsWith('.c') || filename.endsWith('.cpp') || filename.endsWith('.cs')) {
+                        const textContent = new TextDecoder().decode(files[filename]);
+                        const suspicious = scanContent(filename, textContent);
+                        results.innerHTML += `<p>${filename}: <span class="${suspicious ? 'suspicious' : 'safe'}">${suspicious ? 'SUSPICIOUS' : 'SAFE'}</span></p>`;
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
